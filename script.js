@@ -1,6 +1,5 @@
-// 1. Inisialisasi Variabel Utama (Langsung diisi agar tidak delay)
-let baseServerTime = Date.now(); 
-let basePerformanceTime = performance.now(); 
+// --- 1. KONFIGURASI GLOBAL ---
+let globalOffset = 0; // Selisih milidetik antara server dan lokal
 let isSynced = false;
 
 let settings = {
@@ -10,21 +9,44 @@ let settings = {
     checkpointValue: 0
 };
 
-// --- 2. ENGINE JAM (High Precision) ---
+// --- 2. SINKRONISASI NTP (METODE OFFSET) ---
+// Metode ini menghitung selisih (offset) antara waktu HP dan server
+async function syncTimeWithServer() {
+    try {
+        const startFetch = performance.now();
+        const response = await fetch("https://worldtimeapi.org/api/timezone/Etc/UTC", { cache: "no-store" });
+        const data = await response.json();
+        const endFetch = performance.now();
+        
+        // Menghitung latensi (RTT)
+        const latency = (endFetch - startFetch) / 2;
+        const serverTimeUTC = new Date(data.datetime).getTime() + latency;
+        
+        // KUNCI UTAMA: Hitung selisih detik HP dengan server
+        // Jika HP lambat 2 menit, globalOffset akan bernilai +120.000ms
+        globalOffset = serverTimeUTC - Date.now();
+        
+        isSynced = true;
+        console.log("Sinkronisasi Berhasil. Offset ditemukan:", globalOffset, "ms");
+    } catch (err) {
+        console.warn("Gagal NTP, menggunakan waktu lokal perangkat.");
+    }
+}
+
+// --- 3. ENGINE JAM (TIME.IS LOGIC) ---
 function startClock() {
-    // RUMUS: Waktu awal + Durasi sejak halaman dibuka
-    const elapsed = performance.now() - basePerformanceTime;
-    const nowUTC = new Date(baseServerTime + elapsed);
+    // Ambil waktu HP SAAT INI lalu tambahkan selisih (offset) dari server
+    // Ini memastikan waktu yang tampil adalah waktu server sejati
+    const nowServer = new Date(Date.now() + globalOffset);
     
-    // Konversi ke WIB (UTC+7)
-    let h = nowUTC.getUTCHours() + 7;
+    // Konversi manual ke WIB (UTC+7) tanpa peduli zona waktu HP
+    let h = nowServer.getUTCHours() + 7;
     if (h >= 24) h -= 24;
 
-    let m = String(nowUTC.getUTCMinutes()).padStart(2, '0');
-    let s = String(nowUTC.getUTCSeconds()).padStart(2, '0');
+    let m = String(nowServer.getUTCMinutes()).padStart(2, '0');
+    let s = String(nowServer.getUTCSeconds()).padStart(2, '0');
     let ampm = "";
 
-    // Mode AM/PM
     if (settings.isAmPm) {
         ampm = h >= 12 ? ' PM' : ' AM';
         h = h % 12 || 12;
@@ -33,18 +55,16 @@ function startClock() {
 
     // Milidetik
     let msDisplay = "";
-    const ms = nowUTC.getUTCMilliseconds();
+    const ms = nowServer.getUTCMilliseconds();
     if (settings.msPrecision === 1) msDisplay = "." + Math.floor(ms/100);
     if (settings.msPrecision === 2) msDisplay = "." + String(Math.floor(ms/10)).padStart(2, '0');
 
-    // Update Tampilan Jam
-    const clockEl = document.getElementById('time-container');
-    if(clockEl) clockEl.innerText = `${hDisplay}:${m}:${s}${msDisplay}${ampm}`;
+    document.getElementById('time-container').innerText = `${hDisplay}:${m}:${s}${msDisplay}${ampm}`;
 
-    // Logic Progress Bar (Muncul tiap detik berakhiran 9)
+    // Logic Progress Bar (Setiap detik ke-9)
     const fillBar = document.getElementById('fill-bar');
     if (fillBar) {
-        if (nowUTC.getUTCSeconds() % 10 === 9) {
+        if (nowServer.getUTCSeconds() % 10 === 9) {
             const progress = (ms / 1000) * 100;
             fillBar.style.width = progress + "%";
         } else {
@@ -55,46 +75,10 @@ function startClock() {
     requestAnimationFrame(startClock);
 }
 
-// --- 3. SINKRONISASI NTP (Latar Belakang) ---
-async function syncTimeWithServer() {
-    try {
-        const startFetch = performance.now();
-        // Mengambil waktu UTC dari WorldTimeAPI
-        const response = await fetch("https://worldtimeapi.org/api/timezone/Etc/UTC", { cache: "no-store" });
-        const data = await response.json();
-        
-        const latency = (performance.now() - startFetch) / 2;
-        
-        // Update referensi waktu tanpa menghentikan jam
-        baseServerTime = new Date(data.datetime).getTime() + latency;
-        basePerformanceTime = performance.now();
-        isSynced = true;
-        
-        console.log("NTP Berhasil Sinkron.");
-    } catch (err) {
-        console.warn("Gagal NTP, tetap menggunakan waktu lokal.");
-    }
-}
-
-// --- 4. DATA PENGUNJUNG ---
-async function updateVisitorCount() {
-    const visitorEl = document.getElementById('visitor-count');
-    if(!visitorEl) return;
-    try {
-        const response = await fetch(`https://api.countapi.xyz/hit/jam-presisi-unique-v2/visits`);
-        const data = await response.json();
-        visitorEl.innerText = data.value.toLocaleString('id-ID');
-    } catch (err) {
-        visitorEl.innerText = "-";
-    }
-}
-
-// --- 5. PENGATURAN & LOCAL STORAGE ---
+// --- 4. FUNGSI PENDUKUNG (LocalStorage, Modal, UI) ---
 function loadFromStorage() {
     const saved = localStorage.getItem('detikanConfig');
-    if (saved) {
-        settings = JSON.parse(saved);
-    }
+    if (saved) settings = JSON.parse(saved);
     renderCheckpointMarkers();
 }
 
@@ -103,12 +87,13 @@ function saveToStorage() {
     renderCheckpointMarkers();
 }
 
+function resetSettings() { openModal('modalReset'); }
+
 function executeReset() {
     localStorage.removeItem('detikanConfig');
     location.reload(); 
 }
 
-// --- 6. UI & MODAL ---
 function openModal(id) { document.getElementById(id).style.display = 'flex'; }
 function closeAllModals() { document.querySelectorAll('.modal').forEach(m => m.style.display = 'none'); }
 function closeModal(e) { if(e.target.className === 'modal') closeAllModals(); }
@@ -126,7 +111,6 @@ function renderCheckpointMarkers() {
     const container = document.getElementById('marker-container');
     if(!container) return;
     container.innerHTML = ''; 
-    
     if (settings.checkpointType === 'single') {
         let displayVal = settings.checkpointValue >= 1.0 ? "0.0" : settings.checkpointValue.toFixed(1);
         createMarker(settings.checkpointValue * 100, displayVal); 
@@ -150,22 +134,11 @@ function createMarker(percent, label) {
     m.appendChild(span);
     document.getElementById('marker-container').appendChild(m);
 }
-// Fungsi untuk membuka modal saat tombol diklik
-function resetSettings() {
-    openModal('modalReset');
-}
 
-// Fungsi untuk menghapus data saat tombol "Ya, Reset" di dalam modal diklik
-function executeReset() {
-    localStorage.removeItem('detikanConfig');
-    location.reload(); 
-}
-// --- 7. EKSEKUSI AWAL ---
-
-// Load data & markers
+// --- 5. EKSEKUSI AWAL ---
 loadFromStorage();
 
-// Generate opsi modal single checkpoint (0.1 - 0.0)
+// Opsi modal single
 const sc = document.getElementById('single-options');
 if(sc) {
     [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0].forEach(v => {
@@ -177,11 +150,16 @@ if(sc) {
     });
 }
 
-// JALANKAN JAM SEKARANG JUGA (INSTAN)
+// Jalankan jam & Sinkronisasi
 startClock();
-
-// Sinkronkan ke server di latar belakang
 syncTimeWithServer();
 
-// Update jumlah pengunjung
+// Pengunjung
+async function updateVisitorCount() {
+    try {
+        const res = await fetch(`https://api.countapi.xyz/hit/jam-presisi-unique-v3/visits`);
+        const data = await res.json();
+        document.getElementById('visitor-count').innerText = data.value.toLocaleString('id-ID');
+    } catch (e) { document.getElementById('visitor-count').innerText = "-"; }
+}
 updateVisitorCount();
