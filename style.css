@@ -188,6 +188,7 @@ body {
     justify-content: center;
     align-items: center;
     z-index: 100;
+    
 }
 
 .modal-content {
@@ -238,3 +239,27 @@ body {
 .footer{
   font-size: 0.85rem;
 }
+.titleask{
+    width: 100%;
+    max-width: 420px;
+    margin-bottom: 10px;
+    font-size: 15px;
+}
+
+.asksub{
+width: 100%;
+    max-width: 420px;
+    text-decoration: none;
+    font-size: 15px;
+    font-weight: 300;
+    
+}
+.asksub a {
+  text-decoration: none;
+  color: #000; /* atau warna kamu */
+  font-weight: 600;
+}
+.asksub a:hover {
+  color: #888; /* optional */
+}
+

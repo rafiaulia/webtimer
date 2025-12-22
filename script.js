@@ -1,73 +1,51 @@
-// --- 1. KONFIGURASI GLOBAL ---
-let globalOffset = 0; // Selisih milidetik antara server dan lokal
-let isSynced = false;
+// --- 1. CACHE ELEMEN (Optimasi Desktop) ---
+// Mencari elemen sekali saja agar browser tidak kerja keras setiap frame
+const clockEl = document.getElementById('time-container');
+const fillBar = document.getElementById('fill-bar');
+const visitorEl = document.getElementById('visitor-count');
+const markerContainer = document.getElementById('marker-container');
 
-let settings = {
-    msPrecision: 0,
-    isAmPm: false,
-    checkpointType: 'none', 
-    checkpointValue: 0
-};
+// --- 2. VARIABEL GLOBAL ---
+let globalOffset = 0;
+let settings = { msPrecision: 0, isAmPm: false, checkpointType: 'none', checkpointValue: 0 };
 
-// --- 2. SINKRONISASI NTP (METODE OFFSET) ---
-// Metode ini menghitung selisih (offset) antara waktu HP dan server
-async function syncTimeWithServer() {
-    try {
-        const startFetch = performance.now();
-        const response = await fetch("https://worldtimeapi.org/api/timezone/Etc/UTC", { cache: "no-store" });
-        const data = await response.json();
-        const endFetch = performance.now();
-        
-        // Menghitung latensi (RTT)
-        const latency = (endFetch - startFetch) / 2;
-        const serverTimeUTC = new Date(data.datetime).getTime() + latency;
-        
-        // KUNCI UTAMA: Hitung selisih detik HP dengan server
-        // Jika HP lambat 2 menit, globalOffset akan bernilai +120.000ms
-        globalOffset = serverTimeUTC - Date.now();
-        
-        isSynced = true;
-        console.log("Sinkronisasi Berhasil. Offset ditemukan:", globalOffset, "ms");
-    } catch (err) {
-        console.warn("Gagal NTP, menggunakan waktu lokal perangkat.");
-    }
-}
-
-// --- 3. ENGINE JAM (TIME.IS LOGIC) ---
+// --- 3. ENGINE UTAMA (Optimized) ---
 function startClock() {
-    // Ambil waktu HP SAAT INI lalu tambahkan selisih (offset) dari server
-    // Ini memastikan waktu yang tampil adalah waktu server sejati
+    // Ambil waktu server (Lokal + Offset)
     const nowServer = new Date(Date.now() + globalOffset);
     
-    // Konversi manual ke WIB (UTC+7) tanpa peduli zona waktu HP
+    // Gunakan UTC agar independen dari settingan zona waktu komputer
     let h = nowServer.getUTCHours() + 7;
     if (h >= 24) h -= 24;
 
-    let m = String(nowServer.getUTCMinutes()).padStart(2, '0');
-    let s = String(nowServer.getUTCSeconds()).padStart(2, '0');
-    let ampm = "";
+    const m = nowServer.getUTCMinutes();
+    const s = nowServer.getUTCSeconds();
+    const ms = nowServer.getUTCMilliseconds();
 
+    let hDisplay = h;
+    let ampm = "";
     if (settings.isAmPm) {
         ampm = h >= 12 ? ' PM' : ' AM';
-        h = h % 12 || 12;
+        hDisplay = h % 12 || 12;
     }
-    const hDisplay = String(h).padStart(2, '0');
 
-    // Milidetik
-    let msDisplay = "";
-    const ms = nowServer.getUTCMilliseconds();
-    if (settings.msPrecision === 1) msDisplay = "." + Math.floor(ms/100);
-    if (settings.msPrecision === 2) msDisplay = "." + String(Math.floor(ms/10)).padStart(2, '0');
+    // Format teks (Gunakan Template Literals agar cepat)
+    let timeString = `${String(hDisplay).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    
+    // Presisi Milidetik
+    if (settings.msPrecision === 1) timeString += "." + Math.floor(ms/100);
+    else if (settings.msPrecision === 2) timeString += "." + String(Math.floor(ms/10)).padStart(2, '0');
+    
+    if (ampm) timeString += ampm;
 
-    document.getElementById('time-container').innerText = `${hDisplay}:${m}:${s}${msDisplay}${ampm}`;
+    // Render ke layar (Hanya jika elemen ada)
+    if (clockEl) clockEl.textContent = timeString;
 
-    // Logic Progress Bar (Setiap detik ke-9)
-    const fillBar = document.getElementById('fill-bar');
+    // Optimasi Fill Bar: Hanya hitung jika sedang di detik ke-9
     if (fillBar) {
-        if (nowServer.getUTCSeconds() % 10 === 9) {
-            const progress = (ms / 1000) * 100;
-            fillBar.style.width = progress + "%";
-        } else {
+        if (s % 10 === 9) {
+            fillBar.style.width = (ms / 10) + "%";
+        } else if (fillBar.style.width !== "0%") {
             fillBar.style.width = "0%";
         }
     }
@@ -75,51 +53,45 @@ function startClock() {
     requestAnimationFrame(startClock);
 }
 
-// --- 4. FUNGSI PENDUKUNG (LocalStorage, Modal, UI) ---
+// --- 4. SINKRONISASI NTP (Non-Blocking) ---
+async function syncTimeWithServer() {
+    try {
+        const start = performance.now();
+        // Pakai WorldTimeAPI atau Cloudflare (CORS friendly)
+        const res = await fetch("https://worldtimeapi.org/api/timezone/Etc/UTC");
+        const data = await res.json();
+        const latency = (performance.now() - start) / 2;
+        
+        const serverUTC = new Date(data.datetime).getTime() + latency;
+        globalOffset = serverUTC - Date.now();
+        
+        console.log("Synced. Offset:", globalOffset, "ms");
+    } catch (e) {
+        console.warn("Sync failed, using local time.");
+    }
+}
+
+// --- 5. FUNGSI UI & PENGATURAN ---
 function loadFromStorage() {
-    const saved = localStorage.getItem('detikanConfig');
-    if (saved) settings = JSON.parse(saved);
+    try {
+        const saved = localStorage.getItem('detikanConfig');
+        if (saved) settings = JSON.parse(saved);
+    } catch(e) {}
     renderCheckpointMarkers();
-}
-
-function saveToStorage() {
-    localStorage.setItem('detikanConfig', JSON.stringify(settings));
-    renderCheckpointMarkers();
-}
-
-function resetSettings() { openModal('modalReset'); }
-
-function executeReset() {
-    localStorage.removeItem('detikanConfig');
-    location.reload(); 
-}
-
-function openModal(id) { document.getElementById(id).style.display = 'flex'; }
-function closeAllModals() { document.querySelectorAll('.modal').forEach(m => m.style.display = 'none'); }
-function closeModal(e) { if(e.target.className === 'modal') closeAllModals(); }
-
-function setMs(p) { settings.msPrecision = p; saveToStorage(); closeAllModals(); }
-function toggleTimeMode() { settings.isAmPm = !settings.isAmPm; saveToStorage(); }
-function setCheckpoint(type, val) { settings.checkpointType = type; settings.checkpointValue = val; saveToStorage(); closeAllModals(); }
-
-function toggleFullscreen() {
-    if (!document.fullscreenElement) document.documentElement.requestFullscreen();
-    else document.exitFullscreen();
 }
 
 function renderCheckpointMarkers() {
-    const container = document.getElementById('marker-container');
-    if(!container) return;
-    container.innerHTML = ''; 
+    if (!markerContainer) return;
+    markerContainer.innerHTML = ''; 
+    
     if (settings.checkpointType === 'single') {
-        let displayVal = settings.checkpointValue >= 1.0 ? "0.0" : settings.checkpointValue.toFixed(1);
-        createMarker(settings.checkpointValue * 100, displayVal); 
+        const val = settings.checkpointValue;
+        createMarker(val * 100, val >= 1.0 ? "0.0" : val.toFixed(1));
     } else if (settings.checkpointType === 'multi') {
         const count = settings.checkpointValue;
         for (let i = 1; i <= count; i++) {
             let val = (1 / count) * i;
-            let displayVal = val >= 1.0 ? "0.0" : val.toFixed(2);
-            createMarker((100 / count) * i, displayVal);
+            createMarker((100 / count) * i, val >= 1.0 ? "0.0" : val.toFixed(2));
         }
     }
 }
@@ -128,38 +100,58 @@ function createMarker(percent, label) {
     const m = document.createElement('div');
     m.className = 'marker';
     m.style.left = percent + '%';
-    const span = document.createElement('span');
-    span.className = 'marker-label';
-    span.innerText = label;
-    m.appendChild(span);
-    document.getElementById('marker-container').appendChild(m);
+    const s = document.createElement('span');
+    s.className = 'marker-label';
+    s.textContent = label;
+    m.appendChild(s);
+    markerContainer.appendChild(m);
 }
 
-// --- 5. EKSEKUSI AWAL ---
-loadFromStorage();
+// --- 6. INITIALIZATION (Fast Boot) ---
+document.addEventListener('DOMContentLoaded', () => {
+    loadFromStorage();
+    
+    // Bangun opsi modal setelah halaman tampil
+    const sc = document.getElementById('single-options');
+    if(sc) {
+        [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0].forEach(v => {
+            let d = document.createElement('div');
+            d.className = 'modal-option';
+            d.textContent = v === 1.0 ? "0.0" : v.toFixed(1);
+            d.onclick = () => setCheckpoint('single', v);
+            sc.appendChild(d);
+        });
+    }
 
-// Opsi modal single
-const sc = document.getElementById('single-options');
-if(sc) {
-    [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0].forEach(v => {
-        let d = document.createElement('div');
-        d.className = 'modal-option';
-        d.innerText = v === 1.0 ? "0.0" : v.toFixed(1);
-        d.onclick = () => setCheckpoint('single', v);
-        sc.appendChild(d);
-    });
+    // Jalankan jam segera
+    startClock();
+    
+    // Jalankan tugas berat setelah jam berjalan
+    setTimeout(() => {
+        syncTimeWithServer();
+        updateVisitorCount();
+    }, 500);
+});
+
+// Fungsi Reset & Modal tetap sama seperti sebelumnya...
+function resetSettings() { openModal('modalReset'); }
+function executeReset() { localStorage.removeItem('detikanConfig'); location.reload(); }
+function openModal(id) { document.getElementById(id).style.display = 'flex'; }
+function closeAllModals() { document.querySelectorAll('.modal').forEach(m => m.style.display = 'none'); }
+function closeModal(e) { if(e.target.className === 'modal') closeAllModals(); }
+function setMs(p) { settings.msPrecision = p; saveToStorage(); closeAllModals(); }
+function toggleTimeMode() { settings.isAmPm = !settings.isAmPm; saveToStorage(); }
+function setCheckpoint(type, val) { settings.checkpointType = type; settings.checkpointValue = val; saveToStorage(); closeAllModals(); }
+function saveToStorage() { localStorage.setItem('detikanConfig', JSON.stringify(settings)); renderCheckpointMarkers(); }
+function toggleFullscreen() {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+    else document.exitFullscreen();
 }
-
-// Jalankan jam & Sinkronisasi
-startClock();
-syncTimeWithServer();
-
-// Pengunjung
 async function updateVisitorCount() {
+    if (!visitorEl) return;
     try {
-        const res = await fetch(`https://api.countapi.xyz/hit/jam-presisi-unique-v3/visits`);
+        const res = await fetch(`https://api.countapi.xyz/hit/detikan-v4/visits`);
         const data = await res.json();
-        document.getElementById('visitor-count').innerText = data.value.toLocaleString('id-ID');
-    } catch (e) { document.getElementById('visitor-count').innerText = "-"; }
+        visitorEl.textContent = data.value.toLocaleString('id-ID');
+    } catch (e) { visitorEl.textContent = "-"; }
 }
-updateVisitorCount();
