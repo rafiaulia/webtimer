@@ -1,0 +1,240 @@
+:root {
+    --bg-color: #ffffff;
+    --text-color: #000000;
+    --accent-orange: #ff6a00;
+    --border-radius: 25px;
+}
+
+body {
+    margin: 0;
+    padding: 20px;
+    font-family: 'Inter', sans-serif, Arial;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+}
+
+/* Jam Utama */
+/* --- Konfigurasi Font Responsif untuk Jam Utama --- */
+
+/* 1. Ukuran Default (untuk HP / Layar Kecil) */
+.main-clock {
+    font-size: 3.2rem; /* Ukuran lebih kecil untuk HP agar tidak terpotong */
+    font-weight: 800;
+    margin-bottom: 5px;
+    letter-spacing: -1px;
+    transition: font-size 0.3s ease;
+    margin-top: 50px;
+    /* Transisi halus saat resize layar */
+}
+
+/* 2. Tablet (Lebar layar di atas 480px) */
+@media screen and (min-width: 480px) {
+    .main-clock {
+        font-size: 4.5rem;
+    }
+}
+
+/* 3. Desktop (Lebar layar di atas 768px) */
+@media screen and (min-width: 768px) {
+    .main-clock {
+        font-size: 5rem; /* Ukuran besar untuk tampilan desktop */
+        letter-spacing: -3px;
+    }
+}
+
+/* 4. Layar Sangat Besar (Monitor Wide) */
+@media screen and (min-width: 1200px) {
+    .main-clock {
+        font-size: 5rem;
+    }
+}
+
+/* Tambahan: Pastikan container jam tetap di tengah */
+#time-container {
+    width: 100%;
+    text-align: center;
+    display: flex;
+    justify-content: center;
+    align-items: baseline;
+}
+
+/* Container Loading Bar */
+.progress-wrapper {
+    width: 100%;
+    max-width: 420px;
+    margin-bottom: 25px;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 18px;
+    border: 2px solid #000;
+    border-radius: 12px;
+    position: relative;
+    overflow: visible;
+    background: #fff;
+}
+.marker-label {
+    position: absolute;
+    top: 22px; /* Mengatur jarak angka di bawah bar */
+    left: 50%;
+    transform: translateX(-50%); /* Agar angka tepat di tengah garis */
+    font-size: 0.8rem;
+    font-weight: bold;
+    color:black;
+    white-space: nowrap;
+    
+}
+
+.fill {
+    width: 0%;
+    height: 100%;
+    background-color: #000;
+}
+
+/* Garis Checkpoint (Orange) */
+.marker {
+    position: absolute;
+    top: 0;
+    width: 2px;
+    height: 100%;
+    background-color: var(--accent-orange);
+    z-index: 5;
+}
+/* Update pada bagian ini di style.css */
+
+.action-buttons {
+    display: flex;         /* Membuat isi di dalamnya berjejer samping */
+    gap: 10px;             /* Memberikan sedikit jarak/celah antar tombol */
+    width: 100%;
+    max-width: 420px;      /* Sama dengan lebar tombol reset pengaturan */
+    margin-bottom: 25px;
+    margin-top: 25px;
+}
+
+.action-buttons .btn-black {
+    flex: 1;               /* Otomatis membagi lebar 50% - 50% */
+    width: auto;           /* Menimpa aturan width: 100% sebelumnya */
+    margin-bottom: 0;      /* Menghapus margin bawah agar sejajar rapi */
+}
+
+/* Tombol Reset Pengaturan (tetap full width) */
+.btn-reset-all {
+    width: 100%;
+    max-width: 420px;
+    margin-top: 40px;
+}
+/* Tombol */
+.btn-black {
+    width: 100%;
+    max-width: 420px;
+    background: #000;
+    color: #fff;
+    border: none;
+    padding: 14px;
+    border-radius: var(--border-radius);
+    font-weight: 600;
+    font-size: 1rem;
+    margin-bottom: 12px;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.btn-black:hover {
+    opacity: 0.8;
+}
+
+.btn-reset-all {
+    margin-top: 40px;
+}
+
+/* List Pengaturan */
+.settings-group {
+    width: 100%;
+    max-width: 420px;
+    margin-top: 25px;
+    text-align: left;
+}
+
+.settings-group h3 {
+    font-size: 1.2rem;
+    margin-bottom: 10px;
+    font-weight: 700;
+}
+
+.setting-item {
+    padding: 10px 0;
+    font-size: 1.1rem;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.setting-item:hover {
+    opacity: 0.6;
+}
+
+/* Modals */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0,0,0,0.6);
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+}
+
+.modal-content {
+    background: #fff;
+    padding: 25px;
+    border-radius: 20px;
+    width: 85%;
+    max-width: 320px;
+    text-align: center;
+}
+
+.modal-option {
+    padding: 12px;
+    border-bottom: 1px solid #eee;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.modal-option:last-child { border: none; }
+.modal-option:hover { background: #f8f8f8; }
+
+.modal-content p {
+    margin-top: 10px;
+    line-height: 1.4;
+}
+
+/* Memastikan tombol di dalam modal tidak terlalu besar */
+.modal-content .btn-black {
+    padding: 10px;
+    font-size: 0.9rem;
+}
+
+/* Fullscreen Logic */
+:fullscreen .settings-group, :fullscreen .btn-black:not(.exit-fs) {
+    display: none;
+}
+.visitor-section {
+    margin-top: 20px;
+    font-size: 0.85rem;
+    color: #888;
+    text-align: center;
+}
+
+#visitor-count {
+    font-weight: bold;
+    color: #000;
+}
+.footer{
+  font-size: 0.85rem;
+}

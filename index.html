@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detikan UI - Presisi Tinggi</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+</head>
+<body>
+
+    <div id="time-container" class="main-clock">--:--:--</div>
+
+    <div class="progress-wrapper">
+        <div class="progress-bar">
+            <div id="fill-bar" class="fill"></div>
+            <div id="marker-container"></div>
+        </div>
+    </div>
+
+    <div class="action-buttons">
+        <button class="btn-black" onclick="toggleFullscreen()">Mode Layar Penuh</button>
+        <button class="btn-black" onclick="location.reload()">Refresh Halaman</button>
+    </div>
+
+    <div class="settings-group">
+        <h3>Pengaturan Waktu</h3>
+        <div class="setting-item" onclick="openModal('modalMs')">Ketelitian</div>
+        <div class="setting-item" onclick="toggleTimeMode()">Mode Waktu (AM/PM)</div>
+    </div>
+
+    <div class="settings-group">
+        <h3>Pengaturan Checkpoint</h3>
+        <div class="setting-item" onclick="openModal('modalSingle')">Single Checkpoint</div>
+        <div class="setting-item" onclick="openModal('modalMulti')">Multi Checkpoint</div>
+    </div>
+
+    <button class="btn-black btn-reset-all" onclick="resetSettings()">Reset Pengaturan</button>
+
+    <div id="modalMs" class="modal" onclick="closeModal(event)">
+        <div class="modal-content">
+            <h4>Pilih Ketelitian</h4>
+            <div class="modal-option" onclick="setMs(0)">00:00:00</div>
+            <div class="modal-option" onclick="setMs(1)">00:00:00.0</div>
+            <div class="modal-option" onclick="setMs(2)">00:00:00.00</div>
+        </div>
+    </div>
+
+    <div id="modalSingle" class="modal" onclick="closeModal(event)">
+        <div class="modal-content">
+            <h4>Single Checkpoint (Detik 59-00)</h4>
+            <div id="single-options"></div>
+        </div>
+    </div>
+
+    <div id="modalMulti" class="modal" onclick="closeModal(event)">
+        <div class="modal-content">
+            <h4>Multi Checkpoint (Bagi 1 detik)</h4>
+            <div class="modal-option" onclick="setCheckpoint('multi', 2)">2 Bagian (0.50s)</div>
+            <div class="modal-option" onclick="setCheckpoint('multi', 4)">4 Bagian (0.25s)</div>
+            <div class="modal-option" onclick="setCheckpoint('multi', 5)">5 Bagian (0.20s)</div>
+            <div class="modal-option" onclick="setCheckpoint('multi', 10)">10 Bagian (0.10s)</div>
+        </div>
+    </div>
+<div id="modalReset" class="modal" onclick="closeModal(event)">
+    <div class="modal-content">
+        <h4>Reset Pengaturan?</h4>
+        <p style="margin-bottom: 20px; font-size: 0.9rem; color: #666;">Tindakan ini akan mengembalikan semua pengaturan ke kondisi awal.</p>
+        
+        <div style="display: flex; gap: 10px;">
+            <button class="btn-black" style="flex: 1; margin-bottom: 0;" onclick="executeReset()">Ya, Reset</button>
+            <button class="btn-black" style="flex: 1; margin-bottom: 0; background: #eee; color: #000;" onclick="closeAllModals()">Batal</button>
+        </div>
+    </div>
+</div>
+<div class="visitor-section">
+    <p>Total Pengunjung: <span id="visitor-count">Memuat...</span></p>
+</div>
+<div class="footer">dibuat oleh Gemini wkwk</div>
+    <script src="script.js"></script>
+</body>
+</html>
