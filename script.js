@@ -1,26 +1,40 @@
-// --- 1. CACHE ELEMEN (Optimasi Desktop) ---
-// Mencari elemen sekali saja agar browser tidak kerja keras setiap frame
+/**
+ * DETIKAN ENGINE - High Precision NTP Logic
+ * Optimized for Instant Load & Cross-Device Sync
+ */
+
+// 1. Variabel Cache & State
+let serverTimeAtSync = Date.now(); // Baseline awal (lokal)
+let perfTimeAtSync = performance.now(); // Baseline performa
+let isSynced = false;
+
+let settings = { 
+    msPrecision: 0, 
+    isAmPm: false, 
+    checkpointType: 'none', 
+    checkpointValue: 0 
+};
+
+// Cache Elemen DOM (Supaya desktop tidak lag)
 const clockEl = document.getElementById('time-container');
 const fillBar = document.getElementById('fill-bar');
 const visitorEl = document.getElementById('visitor-count');
 const markerContainer = document.getElementById('marker-container');
 
-// --- 2. VARIABEL GLOBAL ---
-let globalOffset = 0;
-let settings = { msPrecision: 0, isAmPm: false, checkpointType: 'none', checkpointValue: 0 };
-
-// --- 3. ENGINE UTAMA (Optimized) ---
+// --- 2. ENGINE UTAMA (Tanpa Jeda) ---
 function startClock() {
-    // Ambil waktu server (Lokal + Offset)
-    const nowServer = new Date(Date.now() + globalOffset);
+    // RUMUS EMAS: (Waktu Server Saat Sinkron) + (Durasi sejak sinkron terjadi)
+    // Ini menghindari manipulasi Date.now() oleh sistem HP/PC
+    const elapsedSinceSync = performance.now() - perfTimeAtSync;
+    const now = new Date(serverTimeAtSync + elapsedSinceSync);
     
-    // Gunakan UTC agar independen dari settingan zona waktu komputer
-    let h = nowServer.getUTCHours() + 7;
+    // Konversi ke WIB (UTC+7)
+    let h = now.getUTCHours() + 7;
     if (h >= 24) h -= 24;
 
-    const m = nowServer.getUTCMinutes();
-    const s = nowServer.getUTCSeconds();
-    const ms = nowServer.getUTCMilliseconds();
+    const m = now.getUTCMinutes();
+    const s = now.getUTCSeconds();
+    const ms = now.getUTCMilliseconds();
 
     let hDisplay = h;
     let ampm = "";
@@ -29,19 +43,18 @@ function startClock() {
         hDisplay = h % 12 || 12;
     }
 
-    // Format teks (Gunakan Template Literals agar cepat)
-    let timeString = `${String(hDisplay).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    // Pembuatan string jam (Efisiensi Tinggi)
+    let timeStr = `${String(hDisplay).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
     
-    // Presisi Milidetik
-    if (settings.msPrecision === 1) timeString += "." + Math.floor(ms/100);
-    else if (settings.msPrecision === 2) timeString += "." + String(Math.floor(ms/10)).padStart(2, '0');
+    if (settings.msPrecision === 1) timeStr += "." + Math.floor(ms/100);
+    else if (settings.msPrecision === 2) timeStr += "." + String(Math.floor(ms/10)).padStart(2, '0');
     
-    if (ampm) timeString += ampm;
+    if (ampm) timeStr += ampm;
 
-    // Render ke layar (Hanya jika elemen ada)
-    if (clockEl) clockEl.textContent = timeString;
+    // Update Layar
+    if (clockEl) clockEl.textContent = timeStr;
 
-    // Optimasi Fill Bar: Hanya hitung jika sedang di detik ke-9
+    // Logic Fill Bar
     if (fillBar) {
         if (s % 10 === 9) {
             fillBar.style.width = (ms / 10) + "%";
@@ -53,53 +66,64 @@ function startClock() {
     requestAnimationFrame(startClock);
 }
 
-// --- 4. SINKRONISASI NTP (Non-Blocking) ---
-async function syncTimeWithServer() {
+// --- 3. SINKRONISASI NTP (Background Process) ---
+async function syncNTP() {
     try {
         const start = performance.now();
-        // Pakai WorldTimeAPI atau Cloudflare (CORS friendly)
-        const res = await fetch("https://worldtimeapi.org/api/timezone/Etc/UTC");
-        const data = await res.json();
-        const latency = (performance.now() - start) / 2;
+        // Menggunakan WorldTimeAPI (CORS Ready & Fast)
+        const response = await fetch("https://worldtimeapi.org/api/timezone/Etc/UTC", { cache: "no-store" });
+        const data = await response.json();
+        const end = performance.now();
         
-        const serverUTC = new Date(data.datetime).getTime() + latency;
-        globalOffset = serverUTC - Date.now();
+        // Hitung Latensi (Round Trip Time / 2)
+        const latency = (end - start) / 2;
         
-        console.log("Synced. Offset:", globalOffset, "ms");
+        // Kunci referensi waktu global
+        serverTimeAtSync = new Date(data.datetime).getTime() + latency;
+        perfTimeAtSync = performance.now();
+        
+        isSynced = true;
+        console.log("Global Sync Success. Latency:", latency.toFixed(2), "ms");
     } catch (e) {
-        console.warn("Sync failed, using local time.");
+        console.warn("Sync failed, using device clock.");
     }
 }
 
-// --- 5. FUNGSI UI & PENGATURAN ---
-function loadFromStorage() {
+// --- 4. DATA PENGUNJUNG ---
+async function updateVisitor() {
+    if (!visitorEl) return;
     try {
-        const saved = localStorage.getItem('detikanConfig');
-        if (saved) settings = JSON.parse(saved);
-    } catch(e) {}
-    renderCheckpointMarkers();
+        const res = await fetch(`https://api.countapi.xyz/hit/detikan-v5/visits`);
+        const data = await res.json();
+        visitorEl.textContent = data.value.toLocaleString('id-ID');
+    } catch (e) { visitorEl.textContent = "-"; }
 }
 
-function renderCheckpointMarkers() {
+// --- 5. UI & PENGATURAN ---
+function loadStorage() {
+    const saved = localStorage.getItem('detikanConfig');
+    if (saved) settings = JSON.parse(saved);
+    renderMarkers();
+}
+
+function renderMarkers() {
     if (!markerContainer) return;
     markerContainer.innerHTML = ''; 
-    
     if (settings.checkpointType === 'single') {
-        const val = settings.checkpointValue;
-        createMarker(val * 100, val >= 1.0 ? "0.0" : val.toFixed(1));
+        createMarker(settings.checkpointValue * 100, settings.checkpointValue >= 1.0 ? "0.0" : settings.checkpointValue.toFixed(1));
     } else if (settings.checkpointType === 'multi') {
-        const count = settings.checkpointValue;
-        for (let i = 1; i <= count; i++) {
-            let val = (1 / count) * i;
-            createMarker((100 / count) * i, val >= 1.0 ? "0.0" : val.toFixed(2));
+        const c = settings.checkpointValue;
+        for (let i = 1; i <= c; i++) {
+            let v = (1 / c) * i;
+            createMarker((100 / c) * i, v >= 1.0 ? "0.0" : v.toFixed(2));
         }
     }
 }
 
-function createMarker(percent, label) {
+function createMarker(pct, label) {
     const m = document.createElement('div');
     m.className = 'marker';
-    m.style.left = percent + '%';
+    m.style.left = pct + '%';
     const s = document.createElement('span');
     s.className = 'marker-label';
     s.textContent = label;
@@ -107,13 +131,19 @@ function createMarker(percent, label) {
     markerContainer.appendChild(m);
 }
 
-// --- 6. INITIALIZATION (Fast Boot) ---
-document.addEventListener('DOMContentLoaded', () => {
-    loadFromStorage();
+// --- 6. INITIALIZATION (The Fast Path) ---
+// Langsung eksekusi tanpa menunggu DOMContentLoaded penuh jika elemen sudah ada
+loadStorage();
+startClock(); // Jalankan jam instan (pakai waktu lokal dulu)
+
+// Jalankan proses berat di latar belakang agar tidak menghambat load
+setTimeout(() => {
+    syncNTP();
+    updateVisitor();
     
-    // Bangun opsi modal setelah halaman tampil
+    // Inisialisasi opsi modal
     const sc = document.getElementById('single-options');
-    if(sc) {
+    if(sc && sc.children.length === 0) {
         [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0].forEach(v => {
             let d = document.createElement('div');
             d.className = 'modal-option';
@@ -122,36 +152,19 @@ document.addEventListener('DOMContentLoaded', () => {
             sc.appendChild(d);
         });
     }
+}, 300);
 
-    // Jalankan jam segera
-    startClock();
-    
-    // Jalankan tugas berat setelah jam berjalan
-    setTimeout(() => {
-        syncTimeWithServer();
-        updateVisitorCount();
-    }, 500);
-});
-
-// Fungsi Reset & Modal tetap sama seperti sebelumnya...
-function resetSettings() { openModal('modalReset'); }
-function executeReset() { localStorage.removeItem('detikanConfig'); location.reload(); }
-function openModal(id) { document.getElementById(id).style.display = 'flex'; }
-function closeAllModals() { document.querySelectorAll('.modal').forEach(m => m.style.display = 'none'); }
-function closeModal(e) { if(e.target.className === 'modal') closeAllModals(); }
-function setMs(p) { settings.msPrecision = p; saveToStorage(); closeAllModals(); }
-function toggleTimeMode() { settings.isAmPm = !settings.isAmPm; saveToStorage(); }
-function setCheckpoint(type, val) { settings.checkpointType = type; settings.checkpointValue = val; saveToStorage(); closeAllModals(); }
-function saveToStorage() { localStorage.setItem('detikanConfig', JSON.stringify(settings)); renderCheckpointMarkers(); }
-function toggleFullscreen() {
+// --- FUNGSI GLOBAL (Pastikan tersedia untuk onclick di HTML) ---
+window.resetSettings = () => openModal('modalReset');
+window.executeReset = () => { localStorage.removeItem('detikanConfig'); location.reload(); };
+window.openModal = (id) => document.getElementById(id).style.display = 'flex';
+window.closeAllModals = () => document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
+window.closeModal = (e) => { if(e.target.className === 'modal') closeAllModals(); };
+window.setMs = (p) => { settings.msPrecision = p; saveToStorage(); closeAllModals(); };
+window.toggleTimeMode = () => { settings.isAmPm = !settings.isAmPm; saveToStorage(); };
+window.setCheckpoint = (type, val) => { settings.checkpointType = type; settings.checkpointValue = val; saveToStorage(); closeAllModals(); };
+function saveToStorage() { localStorage.setItem('detikanConfig', JSON.stringify(settings)); renderMarkers(); }
+window.toggleFullscreen = () => {
     if (!document.fullscreenElement) document.documentElement.requestFullscreen();
     else document.exitFullscreen();
-}
-async function updateVisitorCount() {
-    if (!visitorEl) return;
-    try {
-        const res = await fetch(`https://api.countapi.xyz/hit/detikan-v4/visits`);
-        const data = await res.json();
-        visitorEl.textContent = data.value.toLocaleString('id-ID');
-    } catch (e) { visitorEl.textContent = "-"; }
-}
+};
