@@ -263,3 +263,29 @@ width: 100%;
   color: #888; /* optional */
 }
 
+.test-row {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin: 15px auto;
+    width: 100%;
+    max-width: 400px;
+}
+
+.display-box {
+    flex: 1;
+    border: 1px solid #ccc;
+    border-radius: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    color: #999;
+    background-color: #fff;
+    height: 42px; /* Sesuaikan dengan tinggi btn-black */
+}
+
+.test-row .btn-black {
+    flex: 1;
+    margin-bottom: 0 !important;
+}

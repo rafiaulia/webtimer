@@ -15,6 +15,34 @@ let settings = {
     checkpointValue: 0 
 };
 
+// --- FITUR TES KLIK (Sudah disesuaikan dengan Engine Utama) ---
+window.captureClickTime = function() {
+    // Gunakan rumus yang sama dengan startClock agar hasilnya identik dengan jam utama
+    const elapsedSinceSync = performance.now() - perfTimeAtSync;
+    const now = new Date(serverTimeAtSync + elapsedSinceSync);
+    
+    // Hitung Jam (WIB)
+    let h = now.getUTCHours() + 7;
+    if (h >= 24) h -= 24;
+
+    const m = String(now.getUTCMinutes()).padStart(2, '0');
+    const s = String(now.getUTCSeconds()).padStart(2, '0');
+    
+    // Ambil milidetik dan ubah menjadi 2 digit (centiseconds)
+    const ms = now.getUTCMilliseconds();
+    const cs = String(Math.floor(ms / 10)).padStart(2, '0'); 
+    const hDisplay = String(h).padStart(2, '0');
+
+    const finalResult = `${hDisplay}:${m}:${s}:${cs}`;
+
+    // Masukkan ke elemen Hasil
+    const targetEl = document.getElementById('hasil-klik');
+    if (targetEl) {
+        targetEl.textContent = finalResult;
+        targetEl.style.color = "#000"; // Ubah warna jadi hitam
+    }
+};
+
 // Cache Elemen DOM (Supaya desktop tidak lag)
 const clockEl = document.getElementById('time-container');
 const fillBar = document.getElementById('fill-bar');
@@ -87,16 +115,6 @@ async function syncNTP() {
     } catch (e) {
         console.warn("Sync failed, using device clock.");
     }
-}
-
-// --- 4. DATA PENGUNJUNG ---
-async function updateVisitor() {
-    if (!visitorEl) return;
-    try {
-        const res = await fetch(`https://api.countapi.xyz/hit/detikan-v5/visits`);
-        const data = await res.json();
-        visitorEl.textContent = data.value.toLocaleString('id-ID');
-    } catch (e) { visitorEl.textContent = "-"; }
 }
 
 // --- 5. UI & PENGATURAN ---
