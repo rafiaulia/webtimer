@@ -3,9 +3,13 @@
  * Optimized for Instant Load & Cross-Device Sync
  */
 
-// 1. Variabel Cache & State
-let serverTimeAtSync = Date.now(); // Baseline awal (lokal)
-let perfTimeAtSync = performance.now(); // Baseline performa
+/**
+ * DETIKAN ENGINE - High Precision NTP Logic
+ */
+
+// 1. Variabel Cache & State (Didefinisikan paling atas agar bisa diakses semua fungsi)
+let serverTimeAtSync = Date.now(); 
+let perfTimeAtSync = performance.now(); 
 let isSynced = false;
 
 let settings = { 
@@ -43,11 +47,13 @@ window.captureClickTime = function() {
     }
 };
 
-// Cache Elemen DOM (Supaya desktop tidak lag)
+// Cache Elemen DOM sisanya tetap sama...
 const clockEl = document.getElementById('time-container');
 const fillBar = document.getElementById('fill-bar');
 const visitorEl = document.getElementById('visitor-count');
 const markerContainer = document.getElementById('marker-container');
+
+
 
 // --- 2. ENGINE UTAMA (Tanpa Jeda) ---
 function startClock() {
@@ -115,6 +121,16 @@ async function syncNTP() {
     } catch (e) {
         console.warn("Sync failed, using device clock.");
     }
+}
+
+// --- 4. DATA PENGUNJUNG ---
+async function updateVisitor() {
+    if (!visitorEl) return;
+    try {
+        const res = await fetch(`https://api.countapi.xyz/hit/detikan-v5/visits`);
+        const data = await res.json();
+        visitorEl.textContent = data.value.toLocaleString('id-ID');
+    } catch (e) { visitorEl.textContent = "-"; }
 }
 
 // --- 5. UI & PENGATURAN ---
