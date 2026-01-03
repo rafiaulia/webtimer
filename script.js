@@ -100,26 +100,94 @@ function startClock() {
     requestAnimationFrame(startClock);
 }
 
-// --- 3. SINKRONISASI NTP (Background Process) ---
+// --- 3. SINKRONISASI NTP (Multiple Sources untuk Akurasi Tinggi) ---
 async function syncNTP() {
+    // Helper untuk timeout
+    const fetchWithTimeout = (url, options = {}, timeout = 3000) => {
+        return Promise.race([
+            fetch(url, options),
+            new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Timeout')), timeout)
+            )
+        ]);
+    };
+
+    // Gunakan multiple time sources secara paralel untuk akurasi tinggi
+    const timeSources = [
+        // WorldTimeAPI - sangat reliable
+        async () => {
+            try {
+                const r = await fetchWithTimeout("https://worldtimeapi.org/api/timezone/Etc/UTC", { cache: "no-store" });
+                const d = await r.json();
+                return { time: new Date(d.datetime).getTime(), source: 'worldtimeapi' };
+            } catch (e) { return null; }
+        },
+        // HTTPBin untuk timestamp dari header Date
+        async () => {
+            try {
+                const r = await fetchWithTimeout("https://httpbin.org/headers", { cache: "no-store" });
+                const dateHeader = r.headers.get('Date');
+                return dateHeader ? { time: new Date(dateHeader).getTime(), source: 'httpbin' } : null;
+            } catch (e) { return null; }
+        },
+        // WorldTimeAPI IP endpoint (alternative)
+        async () => {
+            try {
+                const r = await fetchWithTimeout("https://worldtimeapi.org/api/ip", { cache: "no-store" });
+                const d = await r.json();
+                return { time: new Date(d.datetime).getTime(), source: 'worldtimeapi-ip' };
+            } catch (e) { return null; }
+        }
+    ];
+
+    const results = [];
+
+    // Jalankan semua request secara paralel
     try {
-        const start = performance.now();
-        // Menggunakan WorldTimeAPI (CORS Ready & Fast)
-        const response = await fetch("https://worldtimeapi.org/api/timezone/Etc/UTC", { cache: "no-store" });
-        const data = await response.json();
-        const end = performance.now();
-        
-        // Hitung Latensi (Round Trip Time / 2)
-        const latency = (end - start) / 2;
-        
-        // Kunci referensi waktu global
-        serverTimeAtSync = new Date(data.datetime).getTime() + latency;
-        perfTimeAtSync = performance.now();
-        
-        isSynced = true;
-        console.log("Global Sync Success. Latency:", latency.toFixed(2), "ms");
+        const promises = timeSources.map(async (fn) => {
+            try {
+                const requestStart = performance.now();
+                const result = await fn();
+                const requestEnd = performance.now();
+                if (result && result.time) {
+                    const latency = (requestEnd - requestStart) / 2;
+                    return { ...result, latency, adjustedTime: result.time + latency };
+                }
+            } catch (e) {
+                // Ignore individual failures
+            }
+            return null;
+        });
+
+        const responses = await Promise.allSettled(promises);
+        responses.forEach(r => {
+            if (r.status === 'fulfilled' && r.value) {
+                results.push(r.value);
+            }
+        });
     } catch (e) {
-        console.warn("Sync failed, using device clock.");
+        console.warn("Sync failed:", e);
+    }
+
+    // Gunakan hasil terbaik (rata-rata jika ada multiple sources)
+    if (results.length > 0) {
+        // Hitung rata-rata untuk akurasi lebih tinggi (menghilangkan outliers)
+        const times = results.map(r => r.adjustedTime).sort((a, b) => a - b);
+        // Gunakan median jika ada 3+ sources, atau rata-rata jika kurang
+        const avgTime = results.length >= 3 
+            ? times[Math.floor(times.length / 2)]  // Median lebih robust
+            : times.reduce((sum, t) => sum + t, 0) / times.length;  // Average
+        
+        serverTimeAtSync = Math.round(avgTime);
+        perfTimeAtSync = performance.now();
+        isSynced = true;
+        
+        const offset = serverTimeAtSync - Date.now();
+        console.log(`✅ NTP Sync Success (${results.length}/${timeSources.length} sources). Offset dari waktu lokal: ${offset.toFixed(0)}ms`);
+    } else {
+        // Fallback: retry sekali lagi setelah 500ms
+        console.warn("⚠️ Sync failed, retrying...");
+        setTimeout(() => syncNTP(), 500);
     }
 }
 
@@ -165,17 +233,29 @@ function createMarker(pct, label) {
     markerContainer.appendChild(m);
 }
 
-// --- 6. INITIALIZATION (The Fast Path) ---
+// --- 6. INITIALIZATION (Optimized - No Delays) ---
 // Langsung eksekusi tanpa menunggu DOMContentLoaded penuh jika elemen sudah ada
 loadStorage();
-startClock(); // Jalankan jam instan (pakai waktu lokal dulu)
+startClock(); // Jalankan jam instan
 
-// Jalankan proses berat di latar belakang agar tidak menghambat load
-setTimeout(() => {
-    syncNTP();
-    updateVisitor();
-    
-    // Inisialisasi opsi modal
+// Sync NTP immediately (non-blocking) - tanpa delay
+syncNTP();
+
+// Defer non-critical operations menggunakan requestIdleCallback (jika tersedia) atau setTimeout
+if (window.requestIdleCallback) {
+    requestIdleCallback(() => {
+        updateVisitor();
+        initModalOptions();
+    }, { timeout: 1000 });
+} else {
+    // Fallback untuk browser lama
+    setTimeout(() => {
+        updateVisitor();
+        initModalOptions();
+    }, 100);
+}
+
+function initModalOptions() {
     const sc = document.getElementById('single-options');
     if(sc && sc.children.length === 0) {
         [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0].forEach(v => {
@@ -186,7 +266,7 @@ setTimeout(() => {
             sc.appendChild(d);
         });
     }
-}, 300);
+}
 
 // --- FUNGSI GLOBAL (Pastikan tersedia untuk onclick di HTML) ---
 window.resetSettings = () => openModal('modalReset');
